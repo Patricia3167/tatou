@@ -10,9 +10,9 @@ services:
     volumes:
       - user-files:/app/storage
       - ./server/src:/app/src # For development: mount source code
-      # For use on Windows dev machine, comment out when deploying on Linux server
-      - ./server/pki:/home/lab/server/pki
-      - C:/Users/Axel/Documents/tatou-keypair:/home/lab/server_keys
+      
+      - ./server/pki:/home/lab/server/pki # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
+      - C:/Users/Axel/Documents/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
     env_file:
       - .env
     environment:
@@ -28,6 +28,7 @@ services:
       - SERVER_PUBLIC_KEY_PATH=${SERVER_PUBLIC_KEY_PATH}
       - SERVER_PRIVATE_KEY_PATH=${SERVER_PRIVATE_KEY_PATH}
       - SERVER_KEY_PASSPHRASE=${SERVER_KEY_PASSPHRASE}
+      
     depends_on:
       db:
         condition: service_healthy
