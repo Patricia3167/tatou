@@ -13,6 +13,9 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
+from rmap.identity_manager import IdentityManager
+from rmap.rmap import RMAP
+
 import pickle as _std_pickle
 try:
     import dill as _pickle  # allows loading classes not importable by module path
@@ -39,6 +42,25 @@ def create_app():
     app.config["DB_NAME"] = os.environ.get("DB_NAME", "tatou")
 
     app.config["STORAGE_DIR"].mkdir(parents=True, exist_ok=True)
+
+    # --- RMAP Setup ---
+
+    # Pulls the paths from .env.
+    client_keys_dir = os.environ["CLIENT_KEYS_DIR"]
+    server_public_key_path = os.environ["SERVER_PUBLIC_KEY_PATH"]
+    server_private_key_path = os.environ["SERVER_PRIVATE_KEY_PATH"]
+    server_private_key_passphrase = os.environ.get("SERVER_KEY_PASSPHRASE")
+
+
+    identity_manager = IdentityManager(
+        client_keys_dir,
+        server_public_key_path,
+        server_private_key_path,
+        server_private_key_passphrase
+    )
+
+    rmap = RMAP(identity_manager)
+    app.config["RMAP"] = rmap
 
     # --- DB engine only (no Table metadata) ---
     def db_url() -> str:
@@ -809,6 +831,101 @@ def create_app():
             "method": method,
             "position": position
         }), 201
+
+    # POST /rmap-initiate
+    @app.post("/rmap-initiate")
+    def rmap_initiate():
+        rmap = app.config["RMAP"]
+        incoming = request.get_json(silent=True) or {}
+        payload = incoming.get("payload")
+        if not payload:
+            return jsonify({"error": "Missing 'payload'"}), 400
+        try:
+            encrypted_response = rmap.handle_message1(payload)
+            return jsonify({"payload": encrypted_response["payload"]}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    # POST /rmap-get-link
+    @app.post("/rmap-get-link")
+    def rmap_get_link():
+        rmap = app.config["RMAP"]
+        storage_root = Path(app.config["STORAGE_DIR"]).resolve()
+        source_pdf = Path("resources/assignment.pdf")
+
+        incoming = request.get_json(silent=True) or {}
+        payload = incoming.get("payload")
+        if not payload:
+            return jsonify({"error": "Missing 'payload'"}), 400
+        
+        result = rmap.handle_message2(payload)
+        if "error" in result:
+            return jsonify({"error": f"RMAP authentication failed: {result['error']}"}), 400
+        session_secret = result["result"]
+
+        identity = None
+        for ident, (nonce_client, nonce_server) in rmap.nonces.items():
+            combined = (nonce_client << 64) | int(nonce_server)
+            if f"{combined:032x}" == session_secret:
+                identity = ident
+                break
+
+        if identity is None:
+            return jsonify({"error": "Could not resolve identity from session secret"}), 400
+
+        # Step 3: Prepare destination path
+        dest_dir = storage_root / "rmap"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{session_secret}.pdf"
+        dest_path = dest_dir / filename
+
+        # Step 4: Apply watermark
+        try:
+            wm_bytes = WMUtils.apply_watermark(
+                method="axel-watermark",
+                pdf=str(source_pdf),
+                secret=session_secret,
+                key=session_secret,
+                position=None
+            )
+            with dest_path.open("wb") as f:
+                f.write(wm_bytes)
+        except Exception as e:
+            return jsonify({"error": f"Watermarking failed: {str(e)}"}), 500
+
+        # Step 5: Generate link token
+        link_token = hashlib.sha1(filename.encode("utf-8")).hexdigest()
+
+        # Step 6: Log to database
+        try:
+            with get_engine().begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
+                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
+                    """),
+                    {
+                        "documentid": 1,
+                        "link": link_token,
+                        "intended_for": identity,
+                        "secret": session_secret,
+                        "method": "axel-watermark",
+                        "position": "",
+                        "path": str(dest_path)
+                    }
+                )
+                vid = int(conn.execute(text("SELECT LAST_INSERT_ID()")).scalar())
+        except Exception as e:
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+        # Step 7: Return response
+        return jsonify({
+            "id": vid,
+            "documentid": 1,
+            "link": f"/api/get-version/{link_token}",
+            "filename": filename,
+            "size": len(wm_bytes),
+        }), 200
 
     return app
     
