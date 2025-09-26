@@ -17,7 +17,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
     @staticmethod
     def get_usage() -> str:
         return (
-            "Usage: pj-method-secure"
+            "Adds a watermark text to each page in the pdf"
         )
 
 
@@ -35,7 +35,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
             width, height = letter
             c.setFont("Helvetica-Bold", 36)
             c.setFillColorRGB(0.7, 0.7, 0.7, alpha=0.3)
-            c.drawCentredString(width / 2, height / 2, "watermarked")
+            c.drawCentredString(width / 2, height / 2, "Watermark")
             c.save()
             watermark_pdf.seek(0)
 
@@ -50,7 +50,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
                 c = canvas.Canvas(watermark_pdf, pagesize=(page_width, page_height))
                 c.setFont("Helvetica-Bold", 36)
                 c.setFillColorRGB(0.7, 0.7, 0.7, alpha=0.3)
-                c.drawCentredString(page_width / 2, page_height / 2, "watermarked")
+                c.drawCentredString(page_width / 2, page_height / 2, "Watermark")
                 c.save()
                 watermark_pdf.seek(0)
                 watermark = PdfReader(watermark_pdf)
@@ -90,7 +90,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
             data = load_pdf_bytes(pdf)
             reader = PdfReader(BytesIO(data))
             metadata = reader.metadata
-            encrypted_blob = metadata.get("/WatermarkSecret")
+            encrypted_blob = metadata.get("/X")
             if not encrypted_blob:
                 raise SecretNotFoundError("No watermark found.")
             try:

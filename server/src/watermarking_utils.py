@@ -41,6 +41,8 @@ from watermarking_method import (
     WatermarkingMethod,
     load_pdf_bytes,
 )
+from pj_watermarking_method import MyWatermarkingMethod
+from johan_watermark import LogoWatermark
 from add_after_eof import AddAfterEOF
 from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
 
@@ -50,7 +52,9 @@ from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
 
 METHODS: Dict[str, WatermarkingMethod] = {
     AddAfterEOF.name: AddAfterEOF(),
-    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF()
+    UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF(),
+    MyWatermarkingMethod.name: MyWatermarkingMethod(),
+    LogoWatermark.name: LogoWatermark(),
 }
 """Registry of available watermarking methods.
 
