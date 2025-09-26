@@ -3,8 +3,8 @@
 # --- Check for required key files ---
 echo "Checking key files..."
 
-if [ ! -f "$CLIENT_KEYS_DIR/client_pub.asc" ]; then
-  echo "Missing client public key at $CLIENT_KEYS_DIR/client_pub.asc"
+if [ ! -f "$CLIENT_KEYS_DIR/Group_07.asc" ]; then
+  echo "Missing public key at $CLIENT_KEYS_DIR/client_pub.asc"
   exit 1
 fi
 
