@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from rmap.identity_manager import IdentityManager
 from rmap.rmap import RMAP
 from pgpy import PGPKey, PGPMessage
@@ -8,11 +12,15 @@ import json
 # --- Config ---
 IDENTITY = "GroupTest"
 SERVER_URL = "http://localhost:5000"
-CLIENT_KEYS_DIR = "C:/Users/Axel/Documents/GitHub/tatou/server/keys"
-SERVER_PUB_KEY = "C:/Users/Axel/Documents/tatou-keypair/server_pub.asc"
-CLIENT_PRIV_KEY = "C:/Users/Axel/Documents/GitHub/tatou/server/keys/GroupTest_priv.asc"
-SERVER_PRIV_KEY = "C:/Users/Axel/Documents/tatou-keypair/server_priv.asc"
+#CLIENT_KEYS_DIR = "C:/Users/Axel/Documents/GitHub/tatou/server/pki" #AxelPC
+#SERVER_PUB_KEY = "C:/Users/Axel/Documents/tatou-keypair/server_pub.asc" #AxelPC
+#CLIENT_PRIV_KEY = "C:/Users/Axel/Documents/GitHub/tatou/server/keys/GroupTest_priv.asc" #AxelPC
+#SERVER_PRIV_KEY = "C:/Users/Axel/Documents/tatou-keypair/server_priv.asc" #AxelPC
 CLIENT_PASSPHRASE = "GroupTest"  # Update if needed
+CLIENT_KEYS_DIR = "C:/Users/Axel/tatou/server/pki" #AxelLAP
+SERVER_PUB_KEY = "C:/Users/Axel/tatou-keypair/server_pub.asc" #AxelLAP
+CLIENT_PRIV_KEY = "C:/Users/Axel/tatou-test/GroupTest_priv.asc" #AxelLAP
+SERVER_PRIV_KEY = "C:/Users/Axel/tatou-keypair/server_priv.asc" #AxelLAP
 
 # --- Setup ---
 identity_manager = IdentityManager(
