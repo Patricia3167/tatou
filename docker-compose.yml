@@ -12,7 +12,7 @@ services:
       - ./server/src:/app/src # For development: mount source code
       
       - ./server/pki:/home/lab/server/pki # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
-      - C:/Users/outra/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
+      - C:/Users/Admin/Documents/tatou-keypair-20250926T080901Z-1-001/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
     env_file:
       - .env
     environment:
@@ -28,7 +28,6 @@ services:
       - SERVER_PUBLIC_KEY_PATH=${SERVER_PUBLIC_KEY_PATH}
       - SERVER_PRIVATE_KEY_PATH=${SERVER_PRIVATE_KEY_PATH}
       - SERVER_KEY_PASSPHRASE=${SERVER_KEY_PASSPHRASE}
-      
     depends_on:
       db:
         condition: service_healthy
