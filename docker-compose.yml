@@ -9,6 +9,12 @@ services:
       - "5000:5000"
     volumes:
       - user-files:/app/storage
+      - ./server/src:/app/src # For development: mount source code
+      
+      - ./server/pki:/home/lab/server/pki # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
+      - C:/Users/outra/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
       # DB connection details for future use by the API
@@ -18,6 +24,11 @@ services:
       - DB_USER=${MARIADB_USER}
       - DB_PASSWORD=${MARIADB_PASSWORD}
       - FLAG_2=${FLAG_2}
+      - CLIENT_KEYS_DIR=${CLIENT_KEYS_DIR}
+      - SERVER_PUBLIC_KEY_PATH=${SERVER_PUBLIC_KEY_PATH}
+      - SERVER_PRIVATE_KEY_PATH=${SERVER_PRIVATE_KEY_PATH}
+      - SERVER_KEY_PASSPHRASE=${SERVER_KEY_PASSPHRASE}
+      
     depends_on:
       db:
         condition: service_healthy

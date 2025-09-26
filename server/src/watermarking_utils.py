@@ -45,6 +45,7 @@ from pj_watermarking_method import MyWatermarkingMethod
 from johan_watermark import LogoWatermark
 from add_after_eof import AddAfterEOF
 from unsafe_bash_bridge_append_eof import UnsafeBashBridgeAppendEOF
+from axel_watermark import AxelWatermark
 
 # --------------------
 # Method registry
@@ -55,6 +56,7 @@ METHODS: Dict[str, WatermarkingMethod] = {
     UnsafeBashBridgeAppendEOF.name: UnsafeBashBridgeAppendEOF(),
     MyWatermarkingMethod.name: MyWatermarkingMethod(),
     LogoWatermark.name: LogoWatermark(),
+    AxelWatermark.name: AxelWatermark()
 }
 """Registry of available watermarking methods.
 
