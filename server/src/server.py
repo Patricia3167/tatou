@@ -38,9 +38,9 @@ def create_app():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
     app.errorhandler(Exception)(handle_exception)
 
-    app.debug = True
-    app.config["ENV"] = "development"
-    app.config["PROPAGATE_EXCEPTIONS"] = True
+    #app.debug = True
+    #app.config["ENV"] = "development"
+    #app.config["PROPAGATE_EXCEPTIONS"] = True
 
     # --- Config ---
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")

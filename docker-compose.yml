@@ -10,9 +10,10 @@ services:
     volumes:
       - user-files:/app/storage
       - ./server/src:/app/src # For development: mount source code
+      #- ./server/pki:/home/lab/server/pki # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
+      #- C:/Users/outra/tatou-keypair:/home/lab/server_keys
+      #C:/Users/Admin/Documents/tatou-keypair-20250926T080901Z-1-001/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
       
-      - ./server/pki:/home/lab/server/pki # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
-      - C:/Users/Admin/Documents/tatou-keypair-20250926T080901Z-1-001/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
     env_file:
       - .env
     environment:
