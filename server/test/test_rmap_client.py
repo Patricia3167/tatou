@@ -73,6 +73,6 @@ if res2.status_code != 200:
 resp2_json = res2.json()
 link = resp2_json.get("link")
 if link:
-    print("✅ Watermarked PDF link:", link)
+    print("IT WORKED! Watermarked PDF link:", link)
 else:
-    print("⚠️ No link returned. Full response:", resp2_json)
+    print("No link returned. Full response:", resp2_json)
