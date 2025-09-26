@@ -9,7 +9,7 @@ services:
       - "5000:5000"
     volumes:
       - user-files:/app/storage
-      - ./server/pki:/home/lab/tatou/server/pki
+      - ./server/pki:/app/pki
       - /home/lab/server_keys:/home/lab/server_keys
       #- C:/Users/outra/tatou-keypair:/home/lab/server_keys
       #C:/Users/Admin/Documents/tatou-keypair-20250926T080901Z-1-001/tatou-keypair:/home/lab/server_keys # SKA FINNAS VID TEST PÅ WINDOWS. KOMMENTERA BORT PÅ DEPLOY
