@@ -135,7 +135,8 @@ def create_app():
             with get_engine().connect() as conn:
                 conn.execute(text("SELECT 1"))
             db_ok = True
-        except Exception:
+        except Exception as e:
+            print("Error db health fail", e)
             db_ok = False
         return jsonify({"message": "The server is up and running.", "db_connected": db_ok}), 200
 
