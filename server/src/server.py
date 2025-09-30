@@ -897,7 +897,7 @@ def create_app():
     def rmap_get_link():
         rmap = app.config["RMAP"]
         storage_root = Path(app.config["STORAGE_DIR"]).resolve()
-        source_pdf = Path(__file__).parent / "assignment.pdf"
+        source_pdf = Path(__file__).parent / "Group_19.pdf"
 
         incoming = request.get_json(silent=True) or {}
         payload = incoming.get("payload")
