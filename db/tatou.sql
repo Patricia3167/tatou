@@ -54,3 +54,18 @@ CREATE TABLE IF NOT EXISTS `Versions` (
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Ensure a system user exists
+INSERT INTO Users (email, hpassword, login)
+VALUES ('system@tatou.local', '!', 'system')
+ON DUPLICATE KEY UPDATE id=id;
+
+-- Seed the special RMAP document
+INSERT INTO Documents (name, path, ownerid, sha256, size)
+SELECT 'Group_19',
+       '/storage/Group_19.pdf',
+       u.id,
+       UNHEX('5FC2F4E63C51849BAF0F08453725C08E5587B45BF08BEA2FFC33CCB5CD2F6F70'),
+       214231
+FROM Users u
+WHERE u.login = 'system'
+ON DUPLICATE KEY UPDATE path = VALUES(path);

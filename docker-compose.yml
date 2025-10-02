@@ -8,14 +8,14 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - user-files:/app/storage
+      - user-files:/app/storage        # watermarked PDFs (Docker volume, not local)
+      - ./storage:/storage:ro          # originals (host folder, read-only inside container) om det gör någon skillnad
       - ./server/pki:/app/pki
       - ${HOST_SERVER_KEYS}:${SERVER_KEYS_DIR}
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      # DB connection details for future use by the API
       - DB_HOST=db
       - DB_PORT=3306
       - DB_NAME=tatou
@@ -56,7 +56,7 @@ services:
     environment:
       - PMA_HOST=db
       - PMA_PORT=3306
-      - UPLOAD_LIMIT=64M     # <-- use a unit and quote if using YAML key:value form
+      - UPLOAD_LIMIT=64M
       - MEMORY_LIMIT=256M
     ports:
       - "8080:80"
