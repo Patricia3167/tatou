@@ -28,6 +28,7 @@ from watermarking_method import WatermarkingMethod
 #from watermarking_utils import METHODS, apply_watermark, read_watermark, explore_pdf, is_watermarking_applicable, get_method
 
 def create_app():
+
     app = Flask(__name__)
 
     # Register global error handler at the end of app setup
@@ -73,20 +74,7 @@ def create_app():
 
     rmap = RMAP(identity_manager)
     app.config["RMAP"] = rmap
-
-    # --- DB engine only (no Table metadata) ---
-    def db_url() -> str:
-        return (
-            f"mysql+pymysql://{app.config['DB_USER']}:{app.config['DB_PASSWORD']}"
-            f"@{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}?charset=utf8mb4"
-        )
-
-    def get_engine():
-        eng = app.config.get("_ENGINE")
-        if eng is None:
-            eng = create_engine(db_url(), pool_pre_ping=True, future=True)
-            app.config["_ENGINE"] = eng
-        return eng
+    app.config["IDENTITY_MANAGER"] = identity_manager
 
     # --- Helpers ---
     def _serializer():
@@ -135,7 +123,8 @@ def create_app():
             with get_engine().connect() as conn:
                 conn.execute(text("SELECT 1"))
             db_ok = True
-        except Exception:
+        except Exception as e:
+            print("Error db health fail", e)
             db_ok = False
         return jsonify({"message": "The server is up and running.", "db_connected": db_ok}), 200
 
@@ -886,27 +875,33 @@ def create_app():
         if not payload:
             return jsonify({"error": "Missing 'payload'"}), 400
         try:
-            encrypted_response = rmap.handle_message1(payload)
-            return jsonify({"payload": encrypted_response["payload"]}), 200
+            resp = rmap.handle_message1({"payload": payload})
+            if "error" in resp:
+                return jsonify({"error": f"RMAP initiation failed: {resp['error']}"}), 400
+            return jsonify(resp), 200
         except Exception as e:
+            import traceback
+            print("❌ Exception in /rmap-initiate:", repr(e))
+            traceback.print_exc()
             return jsonify({"error": str(e)}), 400
 
     # POST /rmap-get-link
     @app.post("/rmap-get-link")
+
     def rmap_get_link():
         rmap = app.config["RMAP"]
         storage_root = Path(app.config["STORAGE_DIR"]).resolve()
-        source_pdf = Path(__file__).parent / "assignment.pdf"
 
         incoming = request.get_json(silent=True) or {}
         payload = incoming.get("payload")
         if not payload:
             return jsonify({"error": "Missing 'payload'"}), 400
-        
-        result = rmap.handle_message2(payload)
-        if "error" in result:
-            return jsonify({"error": f"RMAP authentication failed: {result['error']}"}), 400
-        session_secret = result["result"]
+
+        resp = rmap.handle_message2({"payload": payload})
+        if "error" in resp:
+            return jsonify({"error": f"RMAP authentication failed: {resp['error']}"}), 400
+
+        session_secret = resp["result"]
 
         # --- Group identity traceability ---
         group_identity = None
@@ -919,20 +914,33 @@ def create_app():
         if group_identity is None:
             return jsonify({"error": "Could not resolve group identity from session secret"}), 400
 
-        # Step 3: Prepare destination path
+        # Step 3: Fetch seeded Group_19 document from DB
+        try:
+            with get_engine().connect() as conn:
+                doc_row = conn.execute(
+                    text("SELECT id, path FROM Documents WHERE name=:n LIMIT 1"),
+                    {"n": "Group_19"},
+                ).first()
+                if not doc_row:
+                    return jsonify({"error": "Group_19 document not found"}), 500
+                documentid = doc_row.id
+                source_pdf = Path(doc_row.path)
+        except Exception as e:
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+        # Step 4: Apply watermark
         dest_dir = storage_root / "rmap"
         dest_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{session_secret}.pdf"
         dest_path = dest_dir / filename
 
-        # Step 4: Apply watermark (embed group identity as secret, session_secret as key)
         try:
             wm_bytes = WMUtils.apply_watermark(
                 method="axel",
                 pdf=str(source_pdf),
-                secret=group_identity,  # <-- group name/identifier
-                key=session_secret,     # <-- session secret
-                position=None
+                secret=group_identity,
+                key=session_secret,
+                position=None,
             )
             with dest_path.open("wb") as f:
                 f.write(wm_bytes)
@@ -942,53 +950,49 @@ def create_app():
         # Step 5: Generate link token
         link_token = hashlib.sha1(filename.encode("utf-8")).hexdigest()
 
-        # Step 6: Log to database (store group_identity and session_secret for traceability)
+        # Step 6: Insert Version row linked to Group_19
         try:
             with get_engine().begin() as conn:
-                result = conn.execute(text("SELECT id FROM Documents LIMIT 1")).fetchone()
-                if result is None:
-                    conn.execute(text("""
-                        INSERT INTO Documents (name, description)
-                        VALUES (:name, :description)
-                    """), {
-                        "name": "Default Document",
-                        "description": "Auto-generated for watermarking"
-                    })
-                    documentid = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
-                else:
-                    documentid = result[0]
-
-                conn.execute(text("""
-                    INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
-                    VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
-                """), {
-                    "documentid": documentid,
-                    "link": link_token,
-                    "intended_for": group_identity,  # <-- group name/identifier
-                    "secret": session_secret,         # <-- session secret
-                    "method": "axel",
-                    "position": "",
-                    "path": str(dest_path)
-                })
-
-                vid = int(conn.execute(text("SELECT LAST_INSERT_ID()")).scalar())
+                conn.execute(
+                    text("""
+                        INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
+                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
+                    """),
+                    {
+                        "documentid": documentid,
+                        "link": link_token,
+                        "intended_for": group_identity,
+                        "secret": session_secret,
+                        "method": "axel",
+                        "position": "",
+                        "path": str(dest_path),
+                    },
+                )
         except Exception as e:
             return jsonify({"error": f"Database error: {str(e)}"}), 500
 
-        # Step 7: Return response
-        return jsonify({
-            "id": vid,
-            "documentid": documentid,
-            "link": f"/api/get-version/{link_token}",
-            "filename": filename,
-            "size": len(wm_bytes),
-        }), 200
+        return jsonify({"link": f"/api/get-version/{link_token}"}), 200
+    
 
     return app
     
 
 # WSGI entrypoint
 app = create_app()
+def get_engine():
+        eng = app.config.get("_ENGINE")
+        if eng is None:
+            eng = create_engine(db_url(), pool_pre_ping=True, future=True)
+            app.config["_ENGINE"] = eng
+        return eng
+
+# --- DB engine only (no Table metadata) ---
+def db_url() -> str:
+    return (
+        f"mysql+pymysql://{app.config['DB_USER']}:{app.config['DB_PASSWORD']}"
+        f"@{app.config['DB_HOST']}:{app.config['DB_PORT']}/{app.config['DB_NAME']}?charset=utf8mb4"
+    )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
