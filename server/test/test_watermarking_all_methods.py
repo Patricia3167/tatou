@@ -4,6 +4,7 @@ import importlib
 import inspect
 from pathlib import Path
 import pytest
+from reportlab.pdfgen import canvas
 
 
 # --------- collect all methods from the registry ----------
@@ -25,13 +26,12 @@ if not CASES:
 # --------- fixtures ----------
 @pytest.fixture(scope="session")
 def sample_pdf_path(tmp_path_factory) -> Path:
-    """Minimal but recognizable PDF bytes."""
+    """Create a valid one-page PDF for testing."""
     pdf = tmp_path_factory.mktemp("pdfs") / "sample.pdf"
-    pdf.write_bytes(
-        b"%PDF-1.4\n"
-        b"1 0 obj\n<< /Type /Catalog >>\nendobj\n"
-        b"%%EOF\n"
-    )
+    c = canvas.Canvas(str(pdf))
+    c.drawString(100, 750, "This is a test PDF.")
+    c.showPage()
+    c.save()
     return pdf
 
 @pytest.fixture(scope="session")

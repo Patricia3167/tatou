@@ -1,13 +1,13 @@
-import base64
 import os
+import base64
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from watermarking_method import WatermarkingMethod, PdfSource, WatermarkingError, SecretNotFoundError, InvalidKeyError, load_pdf_bytes
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from io import BytesIO
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 class MyWatermarkingMethod(WatermarkingMethod):
@@ -29,18 +29,10 @@ class MyWatermarkingMethod(WatermarkingMethod):
     def add_watermark(self, pdf: PdfSource, secret: str, key: str, position: str | None = None) -> bytes:
         try:
             data = load_pdf_bytes(pdf)
-            # 1. Create a watermark PDF with "watermarked" text
-            watermark_pdf = BytesIO()
-            c = canvas.Canvas(watermark_pdf, pagesize=letter)
-            width, height = letter
-            c.setFont("Helvetica-Bold", 36)
-            c.setFillColorRGB(0.7, 0.7, 0.7, alpha=0.3)
-            c.drawCentredString(width / 2, height / 2, "Watermark")
-            c.save()
-            watermark_pdf.seek(0)
-
-            # 2. Overlay watermark on each page
             original = PdfReader(BytesIO(data))
+            if not original.pages:
+                raise WatermarkingError("Cannot add watermark: PDF has zero pages.")
+
             writer = PdfWriter()
             for page in original.pages:
                 # Create a watermark PDF matching the current page size

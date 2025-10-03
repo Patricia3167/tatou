@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import secrets
 from watermarking_method import WatermarkingMethod, PdfSource, load_pdf_bytes, WatermarkingError, SecretNotFoundError, InvalidKeyError
+import pytest
 
 
 class LogoWatermark(WatermarkingMethod):
@@ -94,3 +95,13 @@ class LogoWatermark(WatermarkingMethod):
             return True
         except Exception:
             return False
+
+# Add this to your fixture if you have PyMuPDF installed
+@pytest.fixture(scope="session")
+def sample_pdf_path(tmp_path_factory) -> Path:
+    pdf_path = tmp_path_factory.mktemp("pdfs") / "sample.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(pdf_path)
+    doc.close()
+    return pdf_path
