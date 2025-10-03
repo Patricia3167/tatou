@@ -2,6 +2,7 @@ import io
 import pytest
 import requests
 import uuid
+from reportlab.pdfgen import canvas  # <-- Add this import
 
 API_URL = "http://server:5000/api"
 
@@ -29,9 +30,16 @@ def auth_headers(new_user):
 
 @pytest.fixture
 def uploaded_document(auth_headers):
-    dummy_pdf = io.BytesIO(b"%PDF-1.4\n%EOF\n")
+    # Create a real one-page PDF using reportlab
+    pdf_buffer = io.BytesIO()
+    c = canvas.Canvas(pdf_buffer)
+    c.drawString(100, 750, "This is a test PDF.")
+    c.showPage()
+    c.save()
+    pdf_buffer.seek(0)
+
     files = {
-        "file": ("test.pdf", dummy_pdf, "application/pdf"),
+        "file": ("test.pdf", pdf_buffer, "application/pdf"),
         "name": (None, "test.pdf")
     }
     r = requests.post(f"{API_URL}/upload-document", files=files, headers=auth_headers)
