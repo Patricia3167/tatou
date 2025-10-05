@@ -2,6 +2,7 @@ import os
 import io
 import hashlib
 import datetime as dt
+import mimetypes
 from pathlib import Path
 from functools import wraps
 
@@ -39,9 +40,9 @@ def create_app():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
     app.errorhandler(Exception)(handle_exception)
 
-    #app.debug = True
-    #app.config["ENV"] = "development"
-    #app.config["PROPAGATE_EXCEPTIONS"] = True
+    app.debug = True
+    app.config["ENV"] = "development"
+    app.config["PROPAGATE_EXCEPTIONS"] = True
 
     # --- Config ---
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -185,14 +186,40 @@ def create_app():
     # POST /api/upload-document  (multipart/form-data)
     @app.post("/api/upload-document")
     @require_auth
-    def upload_document():
+    def upload_document(): 
         if "file" not in request.files:
             return jsonify({"error": "file is required (multipart/form-data)"}), 400
         file = request.files["file"]
+        app.logger.info(f"Upload received: filename={file.filename}, content_type={file.content_type}")
+        file.seek(0)
+        header = file.read(8)
+        file.seek(0)
+        app.logger.info(f"File header: {header}")
+
         if not file or file.filename == "":
             return jsonify({"error": "empty filename"}), 400
 
         fname = file.filename
+        # Check extension ONLY PDF ALLOWED NO MORE EXPLOIT.ZIP
+        if not fname.lower().endswith(".pdf"):
+            app.logger.warning("Extension check failed")
+            return jsonify({"error": "only .pdf files are allowed"}), 400
+        
+        # Check MIME type SERIOUSLY ONLY PDFS ALLOWED
+        mime_type, _ = mimetypes.guess_type(fname)
+        if mime_type != "application/pdf":
+            app.logger.warning("Content type check failed")
+            return jsonify({"error": "invalid MIME type, that's not a pdf"}), 400
+        
+        # another check: magic number
+        file.seek(0)
+        header = file.read(4)
+        file.seek(0)
+        if header != b"%PDF":
+            app.logger.warning("Magic number check failed")
+            return jsonify({"error": "file does not appear to be a valid PDF"}), 400
+
+       
 
         user_dir = app.config["STORAGE_DIR"] / "files" / g.user["login"]
         user_dir.mkdir(parents=True, exist_ok=True)
