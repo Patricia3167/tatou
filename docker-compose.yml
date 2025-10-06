@@ -10,6 +10,8 @@ services:
     volumes:
       - user-files:/app/storage        # watermarked PDFs (Docker volume, not local)
       - ./storage:/storage:ro          # originals (host folder, read-only inside container) om det gör någon skillnad
+      - ./storage/rmap_pdfs:/app/storage/rmap_pdfs
+
       - ./server/pki:/app/pki
       - ${HOST_SERVER_KEYS}:${SERVER_KEYS_DIR}
     env_file:

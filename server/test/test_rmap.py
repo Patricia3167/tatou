@@ -1,4 +1,5 @@
 # test/test_rmap.py
+# Test for the full RMAP handshake process including database verification
 import base64
 import json
 import os
@@ -49,7 +50,8 @@ def test_full_rmap_handshake():
     print(">>> Response 2 body:", resp2.get_data(as_text=True))
     assert resp2.status_code == 200, "Expected 200 OK from /rmap-get-link"
     resp2_json = resp2.get_json()
-    link = resp2_json["link"]
+    token = resp2_json["result"]
+    link = f"/api/get-version/{token}"
     print(">>> Link returned:", link)
     assert link.startswith("/api/get-version/")
 

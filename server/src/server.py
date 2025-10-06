@@ -7,6 +7,12 @@ from pathlib import Path
 from functools import wraps
 
 from flask import Flask, jsonify, request, g, send_file
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
+import logging
+import traceback
+
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -32,8 +38,24 @@ def create_app():
 
     app = Flask(__name__)
 
+    # Logging and rate limiter to prevent DDOS. Extremely strict with 30 requests per minute.
+
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
+
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=["30 per minute"]
+    )
+    # Custom handler for rate limit exceeded
+    @app.errorhandler(RateLimitExceeded)
+    def handle_rate_limit(e):
+        app.logger.warning(f"Rate limit exceeded: {e.description}")
+        return jsonify({"error": "Rate limit exceeded"}), 429
+
+
     # Register global error handler at the end of app setup
-    import traceback
     def handle_exception(e):
         print("[ERROR] Unhandled Exception:")
         traceback.print_exc()
@@ -975,7 +997,7 @@ def create_app():
             return jsonify({"error": f"Watermarking failed: {str(e)}"}), 500
 
         # Step 5: Generate link token
-        link_token = hashlib.sha1(filename.encode("utf-8")).hexdigest()
+        link_token = session_secret  # use session secret as link token
 
         # Step 6: Insert Version row linked to Group_19
         try:
@@ -998,7 +1020,7 @@ def create_app():
         except Exception as e:
             return jsonify({"error": f"Database error: {str(e)}"}), 500
 
-        return jsonify({"link": f"/api/get-version/{link_token}"}), 200
+        return jsonify({"result": session_secret}), 200
     
 
     return app
