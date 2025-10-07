@@ -62,9 +62,9 @@ def create_app():
         return jsonify({"error": str(e), "type": type(e).__name__}), 500
     app.errorhandler(Exception)(handle_exception)
 
-    app.debug = True
-    app.config["ENV"] = "development"
-    app.config["PROPAGATE_EXCEPTIONS"] = True
+    # app.debug = True
+    # app.config["ENV"] = "development"
+    # app.config["PROPAGATE_EXCEPTIONS"] = True
 
     # --- Config ---
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -586,7 +586,7 @@ def create_app():
     @app.post("/api/create-watermark/<int:document_id>")
     @require_auth
     def create_watermark(document_id: int | None = None):
-        print(f"[DEBUG] /api/create-watermark called with document_id: {document_id}")
+       # print(f"[DEBUG] /api/create-watermark called with document_id: {document_id}")
         # accept id from path, query (?id= / ?documentid=), or JSON body on GET
         if not document_id:
             document_id = (
@@ -594,7 +594,7 @@ def create_app():
                 or request.args.get("documentid")
                 or (request.is_json and (request.get_json(silent=True) or {}).get("id"))
             )
-        print(f"[DEBUG] Resolved doc_id: {document_id}")
+      #  print(f"[DEBUG] Resolved doc_id: {document_id}")
         try:
             doc_id = document_id
         except (TypeError, ValueError):
@@ -602,7 +602,7 @@ def create_app():
             return jsonify({"error": "document id required"}), 400
             
         payload = request.get_json(silent=True) or {}
-        print(f"[DEBUG] Payload: {payload}")
+      #  print(f"[DEBUG] Payload: {payload}")
         # allow a couple of aliases for convenience
         method = payload.get("method")
         intended_for = payload.get("intended_for")
@@ -623,7 +623,7 @@ def create_app():
         # lookup the document; enforce ownership
         try:
             with get_engine().connect() as conn:
-                print(f"[DEBUG] Looking up document id {doc_id}")
+             #   print(f"[DEBUG] Looking up document id {doc_id}")
                 row = conn.execute(
                     text("""
                         SELECT id, name, path
@@ -698,7 +698,7 @@ def create_app():
         # write bytes
         try:
             with dest_path.open("wb") as f:
-                print(f"[DEBUG] Writing watermarked file to {dest_path}")
+             #   print(f"[DEBUG] Writing watermarked file to {dest_path}")
                 f.write(wm_bytes)
         except Exception as e:
             return jsonify({"error": f"failed to write watermarked file: {e}"}), 500
@@ -709,7 +709,7 @@ def create_app():
 
         try:
             with get_engine().begin() as conn:
-                print(f"[DEBUG] Inserting version into DB for doc_id {doc_id}")
+             #   print(f"[DEBUG] Inserting version into DB for doc_id {doc_id}")
                 conn.execute(
                     text("""
                         INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
@@ -829,7 +829,7 @@ def create_app():
     @app.post("/api/read-watermark/<int:document_id>")
     @require_auth
     def read_watermark(document_id: int | None = None):
-        print(f"[DEBUG] /api/read-watermark called with document_id: {document_id}")
+      #  print(f"[DEBUG] /api/read-watermark called with document_id: {document_id}")
         # accept id from path, query (?id= / ?documentid=), or JSON body on POST
         if not document_id:
             document_id = (
@@ -837,7 +837,7 @@ def create_app():
                 or request.args.get("documentid")
                 or (request.is_json and (request.get_json(silent=True) or {}).get("id"))
             )
-        print(f"[DEBUG] Resolved doc_id: {document_id}")
+    #    print(f"[DEBUG] Resolved doc_id: {document_id}")
         try:
             doc_id = document_id
         except (TypeError, ValueError):
@@ -845,7 +845,7 @@ def create_app():
             return jsonify({"error": "document id required"}), 400
             
         payload = request.get_json(silent=True) or {}
-        print(f"[DEBUG] Payload: {payload}")
+     #   print(f"[DEBUG] Payload: {payload}")
         # allow a couple of aliases for convenience
         method = payload.get("method")
         position = payload.get("position") or None
@@ -864,7 +864,7 @@ def create_app():
         # lookup the document; FIXME enforce ownership
         try:
             with get_engine().connect() as conn:
-                print(f"[DEBUG] Looking up document id {doc_id}")
+             #   print(f"[DEBUG] Looking up document id {doc_id}")
                 row = conn.execute(
                     text("""
                         SELECT id, name, path
@@ -898,13 +898,13 @@ def create_app():
         
         secret = None
         try:
-            print(f"[DEBUG] Attempting to read watermark: method={method}, pdf={file_path}, key={key}")
+         #   print(f"[DEBUG] Attempting to read watermark: method={method}, pdf={file_path}, key={key}")
             secret = WMUtils.read_watermark(
                 method=method,
                 pdf=str(file_path),
                 key=key
             )
-            print(f"[DEBUG] Watermark read result: {secret}")
+          #  print(f"[DEBUG] Watermark read result: {secret}")
         except Exception as e:
             print(f"[ERROR] Error when attempting to read watermark: {e}")
             return jsonify({"error": f"Error when attempting to read watermark: {e}"}), 400
