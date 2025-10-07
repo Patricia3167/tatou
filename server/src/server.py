@@ -228,18 +228,18 @@ def create_app():
 
         if not file or file.filename == "":
             return jsonify({"error": "empty filename"}), 400
-
+        # Check extension ONLY PDF ALLOWED NO MORE EXPLOIT.ZIP
         # Sanitize filename
         fname = secure_filename(file.filename)
         if not fname.lower().endswith(".pdf"):
             app.logger.warning("Extension check failed")
             return jsonify({"error": "only .pdf files are allowed"}), 400
-
+        # Check MIME type
         mime_type, _ = mimetypes.guess_type(fname)
         if mime_type != "application/pdf":
             app.logger.warning("Content type check failed")
             return jsonify({"error": "invalid MIME type, that's not a pdf"}), 400
-
+        # Check magic number
         file.seek(0)
         header = file.read(4)
         file.seek(0)
@@ -663,6 +663,7 @@ def create_app():
             return jsonify({"error": "document not found"}), 404
 
         # resolve path safely under STORAGE_DIR
+        # I think this is what slows things down, but it's not a big deal I hope
         storage_root = Path(app.config["STORAGE_DIR"]).resolve()
         file_path = Path(row.path)
         if not file_path.is_absolute():
