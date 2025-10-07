@@ -48,57 +48,57 @@ class AxelWatermark(WatermarkingMethod):
     def add_watermark(
         self,
         pdf: PdfSource,
-        secret: str,
-        key: str,
-        position: Optional[str] = None,
+        secret: str,       # this is the session key to embed
+        key: str,          # this is the master key used for encryption
+        position: Optional[str] = None,  # unused but accepted
+        intended_for: Optional[str] = None,  # optional metadata
     ) -> bytes:
         if not key:
-            raise ValueError("key must be a non-empty session key")
+            raise ValueError("key (master key) must be provided")
         if not secret:
-            raise ValueError("secret must be provided to embed")
+            raise ValueError("secret (session key) must be provided")
 
         data = load_pdf_bytes(pdf)
         doc = fitz.open(stream=data, filetype="pdf")
 
-        # Encrypt the secret before embedding
-        encrypted = self._encrypt_secret(secret, key)
+        encrypted_token = self._encrypt_secret(secret, key)
+        fingerprint = hashlib.sha256(secret.encode("utf-8")).hexdigest()
 
-        # Visible and invisible payloads contain the encrypted token (not the plaintext secret)
-        visible_text = f"Watermarked with Axel-Watermark (encrypted)\n{encrypted}\nDo not distribute"
-        invisible_text = f"Watermarked with Axel-Watermark (encrypted) {encrypted} Do not distribute"
+        visible_text = f"Watermarked with Axel-Watermark\nFingerprint: {fingerprint}\nDo not distribute"
+        invisible_text = f"Watermarked with Axel-Watermark (encrypted) {encrypted_token} Do not distribute"
 
         for page in doc:
             width, height = page.rect.width, page.rect.height
-            diag = (width**2 + height**2) ** 0.5
-            fontsize = max(int(diag * 0.02), 15)
+            fontsize = min(max(int(height * 0.012), 10), 12)
 
-            # -------------------------
-            # VISIBLE WATERMARK
-            # -------------------------
-            x_step = width * 1.1
-            y_step = height * 0.2
+            line_count = visible_text.count("\n") + 1
+            line_spacing = fontsize * 1.1
+            block_height = line_count * line_spacing
+
+            x_step = width * 1.5
+            y_step = block_height * 2
             y = -height
             while y < height * 1.5:
                 x = -width
                 while x < width * 1.5:
+                    char_width = fontsize * 0.6
+                    max_line_length = max(len(line) for line in visible_text.splitlines())
+                    text_width = char_width * max_line_length
+
                     shape = page.new_shape()
                     shape.insert_text(
-                        fitz.Point(x, y),
+                        fitz.Point(x - text_width / 2, y),
                         visible_text,
                         fontsize=fontsize,
-                        fontname="helvetica",
+                        fontname="courier",
                         rotate=0,
                         color=(0, 0, 0),
-                        fill_opacity=0.45,  # semi-transparent visible watermark
+                        fill_opacity=0.3,
                     )
                     shape.commit()
                     x += x_step
                 y += y_step
 
-            # -------------------------
-            # INVISIBLE WATERMARK
-            # -------------------------
-            # smaller step so it repeats densely for copy detection
             x_step_inv = width * 0.5
             y_step_inv = height * 0.1
             y = 0
@@ -109,11 +109,11 @@ class AxelWatermark(WatermarkingMethod):
                     shape.insert_text(
                         fitz.Point(x, y),
                         invisible_text,
-                        fontsize=1,  # tiny font
-                        fontname="helvetica",
+                        fontsize=1,
+                        fontname="courier",
                         rotate=0,
-                        color=(1, 1, 1),  # white text
-                        fill_opacity=0,  # fully invisible
+                        color=(1, 1, 1),
+                        fill_opacity=0,
                     )
                     shape.commit()
                     x += x_step_inv
@@ -135,23 +135,15 @@ class AxelWatermark(WatermarkingMethod):
             return False
 
     def read_secret(self, pdf: PdfSource, key: str) -> str:
-        """
-        Extract the encrypted token from visible or invisible watermark text,
-        decrypt it with the provided key, and return the plaintext secret.
-
-        Raises SecretNotFoundError if no watermark is found or if decryption fails.
-        """
         if not key:
-            raise ValueError("key must be provided to read the watermark")
+            raise ValueError("key (master key) must be provided")
 
         data = load_pdf_bytes(pdf)
         doc = fitz.open(stream=data, filetype="pdf")
 
-        visible_marker = "Watermarked with Axel-Watermark (encrypted)"
         invisible_prefix = "Watermarked with Axel-Watermark (encrypted) "
         suffix = "Do not distribute"
 
-        # helper to attempt decrypt and return plaintext or None
         def try_decrypt(token: str) -> Optional[str]:
             try:
                 return self._decrypt_secret(token, key)
@@ -167,18 +159,6 @@ class AxelWatermark(WatermarkingMethod):
                 continue
 
             lines = txt.splitlines()
-
-            # 1) Visible multiline format
-            for i in range(len(lines) - 2):
-                if lines[i] == visible_marker and lines[i + 2].strip() == suffix:
-                    token = lines[i + 1].strip()
-                    plain = try_decrypt(token)
-                    if plain is not None:
-                        doc.close()
-                        return plain
-                    # if decryption failed, continue searching
-
-            # 2) Invisible single-line format
             for line in lines:
                 line = line.strip()
                 if line.startswith(invisible_prefix) and line.endswith(suffix):

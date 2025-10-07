@@ -1,4 +1,5 @@
 # tests/test_watermarking_all_methods.py
+# Test all registered watermarking methods for basic functionality
 from __future__ import annotations
 import importlib
 import inspect
