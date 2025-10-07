@@ -282,18 +282,25 @@ def create_app():
                 document_id = int(document_id)
             except (TypeError, ValueError):
                 return jsonify({"error": "document id required"}), 400
-        
+
+        # --- Confidentiality check: ensure user owns the document ---
         try:
             with get_engine().connect() as conn:
+                doc_row = conn.execute(
+                    text("SELECT ownerid FROM Documents WHERE id = :did"),
+                    {"did": document_id},
+                ).first()
+                if not doc_row or int(doc_row.ownerid) != int(g.user["id"]):
+                    # Don't leak existence: always return 404 if not owner
+                    return jsonify({"error": "document not found"}), 404
+
                 rows = conn.execute(
                     text("""
                         SELECT v.id, v.documentid, v.link, v.intended_for, v.secret, v.method
-                        FROM Users u
-                        JOIN Documents d ON d.ownerid = u.id
-                        JOIN Versions v ON d.id = v.documentid
-                        WHERE u.login = :glogin AND d.id = :did
+                        FROM Versions v
+                        WHERE v.documentid = :did
                     """),
-                    {"glogin": str(g.user["login"]), "did": document_id},
+                    {"did": document_id},
                 ).all()
         except Exception as e:
             return jsonify({"error": f"database error: {str(e)}"}), 503

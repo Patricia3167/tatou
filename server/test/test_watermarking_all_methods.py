@@ -80,3 +80,16 @@ class TestAllWatermarkingMethods:
         assert isinstance(extracted, str), f"{method_name}: read_secret must return str"
         assert extracted == secret, f"{method_name}: read_secret should return the exact embedded secret"
 
+    def test_file_reading(self, method_name: str, impl: object, sample_pdf_path: Path):
+        wm_impl = _as_instance(impl)
+        if not wm_impl.is_watermark_applicable(sample_pdf_path, position=None):
+            pytest.skip(f"{method_name}: not applicable to the sample PDF")
+        file_path = sample_pdf_path
+        # Instead of:
+        # subprocess.run(['cat', file_path], ...)
+
+        # Use:
+        with open(file_path, 'rb') as f:
+            content = f.read()
+        # ...use 'content' as needed...
+
