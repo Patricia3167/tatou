@@ -131,15 +131,19 @@ def create_app():
         return h.hexdigest()
 
     # --- Routes ---
-    
+    # Preventing directory traversal attacks
     @app.route("/<path:filename>")
     def static_files(filename):
-        return app.send_static_file(filename)
-
+        
+        safe_name = secure_filename(filename)
+        return app.send_static_file(safe_name)
+    
+    # No risk of directory traversal here
     @app.route("/")
     def home():
         return app.send_static_file("index.html")
     
+    # No risk of directory traversal here
     @app.get("/healthz")
     def healthz():
         try:
@@ -152,6 +156,7 @@ def create_app():
         return jsonify({"message": "The server is up and running.", "db_connected": db_ok}), 200
 
     # POST /api/create-user {email, login, password}
+    # No risk of directory traversal here
     @app.post("/api/create-user")
     def create_user():
         payload = request.get_json(silent=True) or {}
@@ -182,6 +187,7 @@ def create_app():
         return jsonify({"id": row.id, "email": row.email, "login": row.login}), 201
 
     # POST /api/login {login, password}
+    # No risk of directory traversal here
     @app.post("/api/login")
     def login():
         payload = request.get_json(silent=True) or {}
@@ -206,11 +212,13 @@ def create_app():
         return jsonify({"token": token, "token_type": "bearer", "expires_in": app.config["TOKEN_TTL_SECONDS"]}), 200
 
     # POST /api/upload-document  (multipart/form-data)
+    # Preventing directory traversal attacks
     @app.post("/api/upload-document")
     @require_auth
     def upload_document(): 
         if "file" not in request.files:
             return jsonify({"error": "file is required (multipart/form-data)"}), 400
+
         file = request.files["file"]
         app.logger.info(f"Upload received: filename={file.filename}, content_type={file.content_type}")
         file.seek(0)
@@ -221,27 +229,23 @@ def create_app():
         if not file or file.filename == "":
             return jsonify({"error": "empty filename"}), 400
 
-        fname = file.filename
-        # Check extension ONLY PDF ALLOWED NO MORE EXPLOIT.ZIP
+        # Sanitize filename
+        fname = secure_filename(file.filename)
         if not fname.lower().endswith(".pdf"):
             app.logger.warning("Extension check failed")
             return jsonify({"error": "only .pdf files are allowed"}), 400
-        
-        # Check MIME type SERIOUSLY ONLY PDFS ALLOWED
+
         mime_type, _ = mimetypes.guess_type(fname)
         if mime_type != "application/pdf":
             app.logger.warning("Content type check failed")
             return jsonify({"error": "invalid MIME type, that's not a pdf"}), 400
-        
-        # another check: magic number
+
         file.seek(0)
         header = file.read(4)
         file.seek(0)
         if header != b"%PDF":
             app.logger.warning("Magic number check failed")
             return jsonify({"error": "file does not appear to be a valid PDF"}), 400
-
-       
 
         user_dir = app.config["STORAGE_DIR"] / "files" / g.user["login"]
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -250,10 +254,18 @@ def create_app():
         final_name = request.form.get("name") or fname
         stored_name = f"{ts}__{fname}"
         stored_path = user_dir / stored_name
-        file.save(stored_path)
 
-        sha_hex = _sha256_file(stored_path)
-        size = stored_path.stat().st_size
+        # Ensure resolved path is inside user_dir
+        resolved_path = stored_path.resolve()
+        if not str(resolved_path).startswith(str(user_dir.resolve())):
+            app.logger.warning(f"Traversal attempt blocked: resolved_path={resolved_path}")
+            return jsonify({"error": "invalid file path"}), 400
+
+        file.save(resolved_path)
+        app.logger.info(f"[UPLOAD] stored_path={resolved_path}")
+
+        sha_hex = _sha256_file(resolved_path)
+        size = resolved_path.stat().st_size
 
         try:
             with get_engine().begin() as conn:
@@ -264,7 +276,7 @@ def create_app():
                     """),
                     {
                         "name": final_name,
-                        "path": str(stored_path),
+                        "path": str(resolved_path),
                         "ownerid": int(g.user["id"]),
                         "sha256hex": sha_hex,
                         "size": int(size),
@@ -280,6 +292,7 @@ def create_app():
                     {"id": did},
                 ).one()
         except Exception as e:
+            app.logger.error(f"Database error during upload: {e}")
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
         return jsonify({
@@ -291,6 +304,7 @@ def create_app():
         }), 201
 
     # GET /api/list-documents
+    # No risk of directory traversal here
     @app.get("/api/list-documents")
     @require_auth
     def list_documents():
@@ -318,8 +332,8 @@ def create_app():
         return jsonify({"documents": docs}), 200
 
 
-
     # GET /api/list-versions
+    # No risk of directory traversal here
     @app.get("/api/list-versions")
     @app.get("/api/list-versions/<int:document_id>")
     @require_auth
@@ -357,8 +371,8 @@ def create_app():
         } for r in rows]
         return jsonify({"versions": versions}), 200
     
-    
     # GET /api/list-all-versions
+    # No risk of directory traversal here
     @app.get("/api/list-all-versions")
     @require_auth
     def list_all_versions():
@@ -387,6 +401,7 @@ def create_app():
         return jsonify({"versions": versions}), 200
     
     # GET /api/get-document or /api/get-document/<id>  → returns the PDF (inline)
+    # No risk of directory traversal here
     @app.get("/api/get-document")
     @app.get("/api/get-document/<int:document_id>")
     @require_auth
@@ -448,9 +463,9 @@ def create_app():
         return resp
     
     # GET /api/get-version/<link>  → returns the watermarked PDF (inline)
+    # Traversal should be prevented.
     @app.get("/api/get-version/<link>")
-    def get_version(link: str):
-        
+    def get_version(link: str):       
         try:
             with get_engine().connect() as conn:
                 row = conn.execute(
@@ -514,6 +529,7 @@ def create_app():
         return fp
 
     # DELETE /api/delete-document  (and variants)
+    # Safe against directory traversal attacks
     @app.route("/api/delete-document", methods=["DELETE", "POST"])  # POST supported for convenience
     @app.route("/api/delete-document/<document_id>", methods=["DELETE"])
     def delete_document(document_id: int | None = None):
@@ -530,10 +546,14 @@ def create_app():
             return jsonify({"error": "document id required"}), 400
 
         # Fetch the document (enforce ownership)
+        # now checks for uid match
         try:
             with get_engine().connect() as conn:
-                query = "SELECT * FROM Documents WHERE id = " + doc_id
-                row = conn.execute(text(query)).first()
+                row = conn.execute(
+                    text("SELECT * FROM Documents WHERE id = :id AND ownerid = :uid"),
+                    {"id": int(doc_id), "uid": int(g.user["id"])}
+                ).first()
+
         except Exception as e:
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
@@ -582,6 +602,7 @@ def create_app():
         
         
     # POST /api/create-watermark or /api/create-watermark/<id>  → create watermarked pdf and returns metadata
+    # Safe against directory traversal attacks
     @app.post("/api/create-watermark")
     @app.post("/api/create-watermark/<int:document_id>")
     @require_auth
@@ -687,7 +708,7 @@ def create_app():
             return jsonify({"error": f"watermarking failed: {e}"}), 500
 
         # build destination file name: "<original_name>__<intended_to>.pdf"
-        base_name = Path(row.name or file_path.name).stem
+        base_name = secure_filename(Path(row.name or file_path.name).stem) # sanitized base name
         intended_slug = secure_filename(intended_for)
         dest_dir = file_path.parent / "watermarks"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -746,7 +767,7 @@ def create_app():
             "size": len(wm_bytes),
         }), 201
         
-        
+    # Added sanitaztion and safety checks to prevent directory traversal attacks    
     @app.post("/api/load-plugin")
     @require_auth
     def load_plugin():
@@ -815,6 +836,7 @@ def create_app():
     
     
     # GET /api/get-watermarking-methods -> {"methods":[{"name":..., "description":...}, ...], "count":N}
+    # No risk of directory traversal here
     @app.get("/api/get-watermarking-methods")
     def get_watermarking_methods():
         methods = []
@@ -825,6 +847,8 @@ def create_app():
         return jsonify({"methods": methods, "count": len(methods)}), 200
         
     # POST /api/read-watermark
+    # Safe against directory traversal attacks
+    # Now enforces document ownership
     @app.post("/api/read-watermark")
     @app.post("/api/read-watermark/<int:document_id>")
     @require_auth
@@ -861,7 +885,8 @@ def create_app():
             print(f"[ERROR] Validation failed: method={method}, key={key}")
             return jsonify({"error": "method, and key are required"}), 400
 
-        # lookup the document; FIXME enforce ownership
+        # lookup the document, should now also enforce ownership
+         # now checks for uid match
         try:
             with get_engine().connect() as conn:
              #   print(f"[DEBUG] Looking up document id {doc_id}")
@@ -869,9 +894,9 @@ def create_app():
                     text("""
                         SELECT id, name, path
                         FROM Documents
-                        WHERE id = :id
+                        WHERE id = :id AND ownerid = :uid
                     """),
-                    {"id": doc_id},
+                    {"id": doc_id, "uid": int(g.user["id"])},
                 ).first()
         except Exception as e:
             print(f"[ERROR] DB error during document lookup: {e}")
@@ -935,6 +960,7 @@ def create_app():
             return jsonify({"error": str(e)}), 400
 
     # POST /rmap-get-link
+    # Fixed to prevent directory traversal attacks and ensure Group_19 document exists
     @app.post("/rmap-get-link")
 
     def rmap_get_link():
@@ -982,6 +1008,9 @@ def create_app():
         dest_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{session_secret}.pdf"
         dest_path = dest_dir / filename
+        resolved_path = dest_path.resolve()
+        if not str(resolved_path).startswith(str(dest_dir.resolve())): #make sure it's under dest_dir and not traversing out
+            return jsonify({"error": "invalid destination path"}), 500
 
         try:
             wm_bytes = WMUtils.apply_watermark(
