@@ -1005,7 +1005,7 @@ def create_app():
             return jsonify(resp), 200
         except Exception as e:
             import traceback
-            print("❌ Exception in /rmap-initiate:", repr(e))
+            print("Exception in /rmap-initiate:", repr(e))
             traceback.print_exc()
             return jsonify({"error": str(e)}), 400
 
@@ -1084,7 +1084,6 @@ def create_app():
                 conn.execute(
                     text("""
                         INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
-                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                         VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                     """),
                     {
