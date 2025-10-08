@@ -283,6 +283,20 @@ def create_app():
             except (TypeError, ValueError):
                 return jsonify({"error": "document id required"}), 400
 
+        # --- Ownership check: ensure user owns the document ---
+        try:
+            with get_engine().connect() as conn:
+                doc_row = conn.execute(
+                    text("SELECT ownerid FROM Documents WHERE id = :did"),
+                    {"did": document_id},
+                ).first()
+                if not doc_row or int(doc_row.ownerid) != int(g.user["id"]):
+                    # Don't leak existence: always return 404 if not owner
+                    return jsonify({"error": "document not found"}), 404
+        except Exception as e:
+            print(f"[ERROR] DB error during ownership check: {e}")
+            return jsonify({"error": f"database error: {str(e)}"}), 503
+
         # --- Confidentiality check: ensure user owns the document ---
         try:
             with get_engine().connect() as conn:
@@ -662,8 +676,10 @@ def create_app():
             return jsonify({"error": f"failed to write watermarked file: {e}"}), 500
             print(f"[ERROR] Failed to write watermarked file: {e}")
 
-        # link token = sha1(watermarked_file_name)
-        link_token = hashlib.sha1(candidate.encode("utf-8")).hexdigest()
+        # link token = sha1(watermarked_file_name + uuid)
+        import uuid
+        unique_str = f"{candidate}-{uuid.uuid4().hex}"
+        link_token = hashlib.sha1(unique_str.encode("utf-8")).hexdigest()
 
         try:
             with get_engine().begin() as conn:
@@ -801,15 +817,13 @@ def create_app():
         except (TypeError, ValueError):
             print("[ERROR] Invalid document id")
             return jsonify({"error": "document id required"}), 400
-            
+
         payload = request.get_json(silent=True) or {}
         print(f"[DEBUG] Payload: {payload}")
-        # allow a couple of aliases for convenience
         method = payload.get("method")
         position = payload.get("position") or None
         key = payload.get("key")
 
-        # validate input
         try:
             doc_id = int(doc_id)
         except (TypeError, ValueError):
@@ -819,29 +833,57 @@ def create_app():
             print(f"[ERROR] Validation failed: method={method}, key={key}")
             return jsonify({"error": "method, and key are required"}), 400
 
-        # lookup the document; FIXME enforce ownership
+        # --- Ownership check: ensure user owns the document ---
         try:
             with get_engine().connect() as conn:
-                print(f"[DEBUG] Looking up document id {doc_id}")
-                row = conn.execute(
+                doc_row = conn.execute(
+                    text("SELECT ownerid FROM Documents WHERE id = :did"),
+                    {"did": doc_id},
+                ).first()
+                if not doc_row or int(doc_row.ownerid) != int(g.user["id"]):
+                    # Don't leak existence: always return 404 if not owner
+                    return jsonify({"error": "document not found"}), 404
+        except Exception as e:
+            print(f"[ERROR] DB error during ownership check: {e}")
+            return jsonify({"error": f"database error: {str(e)}"}), 503
+
+        # --- NEW: lookup latest version path first ---
+        try:
+            with get_engine().connect() as conn:
+                print(f"[DEBUG] Looking up latest version for document id {doc_id}")
+                version_row = conn.execute(
                     text("""
-                        SELECT id, name, path
-                        FROM Documents
-                        WHERE id = :id
+                        SELECT path
+                        FROM Versions
+                        WHERE documentid = :id
+                        ORDER BY id DESC
+                        LIMIT 1
                     """),
                     {"id": doc_id},
                 ).first()
+
+                if version_row:
+                    file_path = Path(version_row.path)
+                    print(f"[DEBUG] Using watermarked file from Versions: {file_path}")
+                else:
+                    # fallback to base document
+                    print(f"[DEBUG] No version found, using base document path")
+                    base_row = conn.execute(
+                        text("""
+                            SELECT path
+                            FROM Documents
+                            WHERE id = :id
+                        """),
+                        {"id": doc_id},
+                    ).first()
+                    if not base_row:
+                        return jsonify({"error": "document not found"}), 404
+                    file_path = Path(base_row.path)
         except Exception as e:
             print(f"[ERROR] DB error during document lookup: {e}")
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
-        if not row:
-            print("[ERROR] Document not found")
-            return jsonify({"error": "document not found"}), 404
-
-        # resolve path safely under STORAGE_DIR
         storage_root = Path(app.config["STORAGE_DIR"]).resolve()
-        file_path = Path(row.path)
         if not file_path.is_absolute():
             file_path = storage_root / file_path
         file_path = file_path.resolve()
@@ -853,7 +895,7 @@ def create_app():
         if not file_path.exists():
             print("[ERROR] File missing on disk")
             return jsonify({"error": "file missing on disk"}), 410
-        
+
         secret = None
         try:
             print(f"[DEBUG] Attempting to read watermark: method={method}, pdf={file_path}, key={key}")
@@ -963,6 +1005,7 @@ def create_app():
                 conn.execute(
                     text("""
                         INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
+                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                         VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                     """),
                     {
