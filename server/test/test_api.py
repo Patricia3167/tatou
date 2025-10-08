@@ -1,3 +1,5 @@
+# Test for the /healthz route to ensure the server is running and responsive
+
 from server import app
 
 def test_healthz_route():
