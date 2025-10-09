@@ -38,7 +38,7 @@ def create_app():
 
     app = Flask(__name__)
 
-    # Logging and rate limiter to prevent DDOS. Extremely strict with 30 requests per minute.
+    # Logging and rate limiter to prevent DDOS. Less strict than before but enough to notify when something fishy is going on.
 
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
@@ -46,7 +46,7 @@ def create_app():
     limiter = Limiter(
         get_remote_address,
         app=app,
-        default_limits=["30 per minute"]
+        default_limits=["150 per minute"]
     )
     # Custom handler for rate limit exceeded
     @app.errorhandler(RateLimitExceeded)
@@ -1005,7 +1005,7 @@ def create_app():
             return jsonify(resp), 200
         except Exception as e:
             import traceback
-            print("❌ Exception in /rmap-initiate:", repr(e))
+            print("Exception in /rmap-initiate:", repr(e))
             traceback.print_exc()
             return jsonify({"error": str(e)}), 400
 
@@ -1084,7 +1084,6 @@ def create_app():
                 conn.execute(
                     text("""
                         INSERT INTO Versions (documentid, link, intended_for, secret, method, position, path)
-                        VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                         VALUES (:documentid, :link, :intended_for, :secret, :method, :position, :path)
                     """),
                     {
