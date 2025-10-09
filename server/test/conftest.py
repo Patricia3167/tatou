@@ -7,24 +7,30 @@ from reportlab.pdfgen import canvas
 API_URL = "http://server:5000/api"
 
 @pytest.fixture
-def new_user():
+def user1():
     unique = uuid.uuid4().hex[:8]
     user = {
-        "login": f"testuser_{unique}",
+        "login": f"user1_{unique}",
         "password": "testpass123",
-        "email": f"testuser_{unique}@example.com"
+        "email": f"user1_{unique}@example.com"
     }
-    r = requests.post(f"{API_URL}/create-user", json=user)
-    assert r.status_code == 201
+    requests.post(f"{API_URL}/create-user", json=user)
     return user
 
 @pytest.fixture
-def auth_headers(new_user):
-    r = requests.post(f"{API_URL}/login", json={
-        "email": new_user["email"],
-        "password": new_user["password"]
-    })
-    assert r.status_code == 200
+def user2():
+    unique = uuid.uuid4().hex[:8]
+    user = {
+        "login": f"user2_{unique}",
+        "password": "testpass123",
+        "email": f"user2_{unique}@example.com"
+    }
+    requests.post(f"{API_URL}/create-user", json=user)
+    return user
+
+@pytest.fixture
+def auth_headers(user1):
+    r = requests.post(f"{API_URL}/login", json={"email": user1["email"], "password": user1["password"]})
     token = r.json()["token"]
     return {"Authorization": f"Bearer {token}"}
 

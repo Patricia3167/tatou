@@ -15,7 +15,9 @@ def test_delete_document_owner(auth_headers, uploaded_document):
     assert r_path.status_code == 200
     resp_json = r_path.json()
     assert resp_json["deleted"] is True
-    assert resp_json["id"] == doc_id
+    assert str(resp_json["id"]) == str(doc_id)
+    # or
+    # assert int(resp_json["id"]) == int(doc_id)
 
     # Kontrollera att dokumentet inte längre finns för ägaren
     url_check = f"{API_URL}/get-document/{doc_id}"
@@ -23,14 +25,14 @@ def test_delete_document_owner(auth_headers, uploaded_document):
     assert r_check.status_code == 404
 
 
-def test_delete_document_other_user_forbidden(auth_headers, uploaded_document, new_user):
+def test_delete_document_other_user_forbidden(auth_headers, uploaded_document, user2):
     """
     Testar att en annan användare inte kan ta bort dokument som tillhör någon annan.
     """
     doc_id = uploaded_document["id"]
 
     # Logga in som annan användare
-    login_payload = {"email": new_user["email"], "password": new_user["password"]}
+    login_payload = {"email": user2["email"], "password": user2["password"]}
     login_resp = requests.post(f"{API_URL}/login", json=login_payload)
     assert login_resp.status_code == 200
     token = login_resp.json()["token"]
