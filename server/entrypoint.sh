@@ -20,6 +20,22 @@ fi
 
 echo "All key files found."
 
+
+# --- Check FLAG_1 ---
+if [[ -z "${FLAG_1:-}" ]]; then
+  echo "WARNING: FLAG_1 is not set"
+fi
+
+# --- Replace placeholder in /flag ---
+if [[ -f "/flag" ]]; then
+  if grep -q "REPLACE_THIS_STRING_WITH_SERVER_FLAG" "/flag"; then
+    echo "Replacing placeholder in flag with $FLAG_1"
+    sed -i "s/REPLACE_THIS_STRING_WITH_SERVER_FLAG/${FLAG_1}/g" /flag
+  fi
+else
+  echo "WARNING: /flag not found, skipping"
+fi
+
 # --- Check FLAG_2 ---
 if [[ -z "${FLAG_2:-}" ]]; then
   echo "WARNING: FLAG_2 is not set"
