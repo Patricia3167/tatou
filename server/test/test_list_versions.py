@@ -2,7 +2,7 @@ import requests
 import json
 import uuid
 
-def test_list_versions(auth_headers, uploaded_document, new_user):
+def test_list_versions(auth_headers, uploaded_document, user2):
     # Check available watermarking methods
     r_methods = requests.get("http://localhost:5000/api/get-watermarking-methods", headers=auth_headers)
     print("Available methods:", r_methods.json())
@@ -11,7 +11,7 @@ def test_list_versions(auth_headers, uploaded_document, new_user):
 
     watermark_data = {
         "method": "my-method-secure",
-        "intended_for": new_user["email"],
+        "intended_for": user2["email"],
         "secret": "mysecret",
         "key": "mykey"
     }
