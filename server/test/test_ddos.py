@@ -16,9 +16,9 @@ def client():
 ])
 def test_rate_limit_exceeded(client, endpoint):
     # Simulate 31 requests from the same IP
-    for i in range(31):
+    for i in range(121):
         resp = client.post(endpoint, data={"file": (BytesIO(b"%PDF-1.4"), "test.pdf")}, content_type="multipart/form-data")
-        if i < 30:
+        if i < 120:
             assert resp.status_code != 429, f"Unexpected rate limit at request {i + 1}"
         else:
-            assert resp.status_code == 429, "Expected rate limit to trigger on 31st request"
+            assert resp.status_code == 429, "Expected rate limit to trigger on 121st request"

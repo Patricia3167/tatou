@@ -38,7 +38,7 @@ def create_app():
 
     app = Flask(__name__)
 
-    # Logging and rate limiter to prevent DDOS. Extremely strict with 30 requests per minute.
+    # Logging and rate limiter to prevent DDOS. Less strict than before but enough to notify when something fishy is going on.
 
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
@@ -46,7 +46,7 @@ def create_app():
     limiter = Limiter(
         get_remote_address,
         app=app,
-        default_limits=["30 per minute"]
+        default_limits=["150 per minute"]
     )
     # Custom handler for rate limit exceeded
     @app.errorhandler(RateLimitExceeded)
