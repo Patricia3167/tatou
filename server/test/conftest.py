@@ -3,6 +3,8 @@ import pytest
 import requests
 import uuid
 from reportlab.pdfgen import canvas
+from server import app
+from sqlalchemy import text
 
 API_URL = "http://server:5000/api"
 
@@ -35,8 +37,18 @@ def auth_headers(user1):
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
+def auth_client(user1):
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        #Get token through login
+        resp = client.post("/api/login", json={"email": user1["email"], "password": user1["password"]})
+        token = resp.get_json()["token"]
+        client.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+        yield client
+
+@pytest.fixture
 def uploaded_document(auth_headers):
-    # Create a real multi-page PDF using reportlab
+    # Using reportlab to create a real pdf with multiple pages
     pdf_buffer = io.BytesIO()
     c = canvas.Canvas(pdf_buffer)
     c.drawString(100, 750, "This is a test PDF.")
@@ -59,7 +71,7 @@ def watermarked_document(auth_headers, uploaded_document):
     import uuid
     unique = uuid.uuid4().hex[:8]
     watermark_payload = {
-        "method": "axel",  # or another valid method
+        "method": "axel",
         "position": "top-left",
         "key": "testkey123",
         "secret": f"mysecret_{unique}",
@@ -84,3 +96,76 @@ def watermarked_document(auth_headers, uploaded_document):
     result["watermark_response"] = watermark_response
     result["watermarked_pdf_bytes"] = watermarked_pdf_bytes
     return result
+
+@pytest.fixture
+def client():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        yield client
+
+@pytest.fixture(scope="function")
+def ensure_group19_document(user1):
+    """Ensure the Group_19 document exists in the database for RMAP tests."""
+    from server import get_engine
+    engine = get_engine()
+    owner_email = user1["email"]
+    ownerid = 1
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT id FROM Users WHERE email=:email LIMIT 1"),
+            {"email": owner_email},
+        ).first()
+        if row:
+            ownerid = row[0]
+
+        result = conn.execute(
+            text("SELECT id FROM Documents WHERE name=:n LIMIT 1"),
+            {"n": "Group_19"},
+        ).first()
+        if not result:
+            conn.execute(
+                text(
+                    "INSERT INTO Documents (name, path, ownerid, sha256, size) "
+                    "VALUES (:name, :path, :ownerid, UNHEX(:sha256hex), :size)"
+                ),
+                {
+                    "name": "Group_19",
+                    "path": "/tmp/group_19.pdf",
+                    "ownerid": ownerid,
+                    "sha256hex": "0" * 64,
+                    "size": 12345,
+                },
+            )
+
+# List of external group URLs
+EXTERNAL_GROUPS = {
+    "Group_03": "http://10.11.12.13:5000",
+    "Group_04": "http://10.11.12.19:5000",
+    "Group_07": "http://10.11.12.14:5000",
+    "Group_08": "http://10.11.12.7:5000",
+    "Group_09": "http://10.11.12.10:5000",
+    "Group_14": "http://10.11.12.18:5000",
+    "Group_19": "http://server:5000",
+    "Group_20": "http://10.11.12.9:5000",
+    "Group_22": "http://10.11.12.8:5000",
+    "Group_24": "http://10.11.12.15:5000",
+    "Group_26": "http://10.11.12.12:5000",
+}
+
+def is_reachable(url, timeout=2):
+    """Return True if the given base URL responds, False otherwise."""
+    try:
+        r = requests.get(url, timeout=timeout)
+        return r.status_code < 500
+    except Exception:
+        return False
+
+@pytest.fixture
+def skip_if_group_unreachable(request):
+    """Fixture to skip a test if the external group is unreachable."""
+    group_name = getattr(request, 'param', None)
+    if group_name and group_name in EXTERNAL_GROUPS:
+        base_url = EXTERNAL_GROUPS[group_name]
+        if not is_reachable(base_url):
+            pytest.skip(f"Skipping {group_name}: {base_url} not reachable")

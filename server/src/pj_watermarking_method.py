@@ -22,7 +22,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
 
 
     def _derive_key(self, key: str) -> bytes:
-        # Derive a 256-bit key from the user key (simple hash, for demo; use PBKDF2 for production)
+        # Derive a 256-bit key from the user key
         return hashlib.sha256(key.encode("utf-8")).digest()
 
 
@@ -49,7 +49,7 @@ class MyWatermarkingMethod(WatermarkingMethod):
                 page.merge_page(watermark.pages[0])
                 writer.add_page(page)
 
-            # 3. Encrypt the secret as before
+            # Encrypt the secret as before
             aes_key = self._derive_key(key)
             aesgcm = AESGCM(aes_key)
             nonce = os.urandom(12)
@@ -59,10 +59,10 @@ class MyWatermarkingMethod(WatermarkingMethod):
                 f"{base64.urlsafe_b64encode(ct).decode('ascii')}"
             )
 
-            # 4. Store encrypted secret in PDF metadata
+            #Store encrypted secret in PDF metadata
             writer.add_metadata({"/X": encrypted_blob})
 
-            # 5. Write the final PDF once
+            #Write the final PDF once
             output_pdf = BytesIO()
             writer.write(output_pdf)
             output_pdf.seek(0)

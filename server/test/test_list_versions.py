@@ -32,7 +32,7 @@ def test_list_versions(auth_headers, uploaded_document, user2):
     assert isinstance(data["versions"], list)
     assert len(data["versions"]) >= 1
 
-    # --- Confidentiality check: another user should NOT see versions or metadata ---
+    #Confidentiality check: another user should not see versions or metadata
     # Register and login as a different user
     unique = uuid.uuid4().hex[:8]
     other_user = {
