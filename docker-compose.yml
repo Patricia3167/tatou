@@ -11,6 +11,7 @@ services:
       - user-files:/app/storage
       - ./storage:/storage:ro
       - ./storage/rmap_pdfs:/app/storage/rmap_pdfs
+      - ./server/src/security.log:/app/security.log
 
       - ./server/pki:/app/pki
       - ${HOST_SERVER_KEYS}:${SERVER_KEYS_DIR}

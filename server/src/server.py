@@ -1,3 +1,4 @@
+
 import os
 import io
 import hashlib
@@ -42,7 +43,7 @@ def create_app():
     app = Flask(__name__)
 
     # --- Security logging setup ---
-    security_log = logging.FileHandler("security.log")
+    security_log = logging.FileHandler("logs/security.log")
     security_log.setLevel(logging.WARNING)
     formatter = logging.Formatter("[%(asctime)s] %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
     security_log.setFormatter(formatter)
@@ -209,6 +210,9 @@ def create_app():
 
         # Check for maximum failed login attempts
         if failed_login_attempts.get(email, 0) >= MAX_FAILED_LOGIN:
+            app.logger.warning(
+                f"[SECURITY] Account locked after too many failed login attempts: {email} from {request.remote_addr}"
+            )
             return jsonify({"error": "maximum failed login attempts reached"}), 429
 
         try:
@@ -253,7 +257,6 @@ def create_app():
         # Sanitize filename
         fname = secure_filename(file.filename)
         if not fname.lower().endswith(".pdf"):
-            app.logger.warning("Extension check failed")
             app.logger.warning("[SECURITY] Invalid file extension attempt detected")
             return jsonify({"error": "only .pdf files are allowed"}), 400
         # Check MIME type
@@ -1110,4 +1113,3 @@ def db_url() -> str:
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
