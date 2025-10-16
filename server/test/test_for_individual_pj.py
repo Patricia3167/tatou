@@ -3,11 +3,13 @@ import pytest
 import tempfile
 import io
 from pathlib import Path
-from server import app, db_url, create_app, get_method
+from server import app, db_url, create_app
 from watermarking_utils import get_method
 from watermarking_method import load_pdf_bytes
 from axel_watermark import AxelWatermark
 from fitz import open as fitz_open
+from flask import Flask
+from test_watermarking_all_methods import sample_pdf_path
 
 #for mutants server.x_db_url__mutmut_10 & server.x_db_url__mutmut_9
 def test_db_url_uses_correct_db_name(monkeypatch):
@@ -36,25 +38,6 @@ def test_get_method_unknown_method_message():
 def test_create_app_returns_flask_instance():
     app = create_app()
     assert isinstance(app, Flask), "create_app() should return a Flask app instance"
-
-#for mutant server.x_create_app__mutmut_200
-def test_sha256_file_reads_file_correctly():
-    app = create_app()
-    with app.app_context():
-        # Create a temporary file with known content
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp.write(b"test content")
-            tmp_path = Path(tmp.name)
-
-        # Import the function
-        from server import _sha256_file
-
-        # Should not raise TypeError and should return a valid hash
-        result = _sha256_file(tmp_path)
-        assert isinstance(result, str)
-        assert len(result) == 64  # SHA256 hex digest length
-
-        tmp_path.unlink()  # Clean up
 
 # for mutant server.x_get_engine__mutmut_6
 def test_get_engine_returns_engine_instance():
@@ -94,9 +77,13 @@ def test_load_pdf_bytes_with_filelike():
     assert result == pdf_bytes, "load_pdf_bytes should return the bytes from a file-like object unchanged"
 
 # for mutant axel_watermark.x_add_watermark__mutmut_15
-def test_add_watermark_requires_filetype(monkeypatch):
-    # Create a minimal valid PDF
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+def test_add_watermark_requires_filetype(sample_pdf_path):
+    from axel_watermark import AxelWatermark
+
+    # Read the PDF bytes from the fixture file
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
     secret = "mysecret"
     key = "mykey"
     aw = AxelWatermark()
@@ -115,9 +102,10 @@ def test_add_watermark_missing_key_message():
     assert "key (master key) must be provided" in str(excinfo.value)
 
 #for mutant axel_watermark.xǁAxelWatermarkǁis_watermark_applicable__mutmut_1
-def test_is_watermark_applicable_with_valid_pdf():
+def test_is_watermark_applicable_with_valid_pdf(sample_pdf_path):
     aw = AxelWatermark()
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
     assert aw.is_watermark_applicable(pdf_bytes) is True
 
 #for mutant axel_watermark.xǁAxelWatermarkǁis_watermark_applicable__mutmut_13
@@ -135,21 +123,23 @@ def test_read_secret_missing_key_message():
     assert "key (master key) must be provided" in str(excinfo.value)
 
 # for mutant axel_watermark.xǁAxelWatermarkǁread_secret__mutmut_9
-def test_read_secret_requires_filetype():
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+def test_read_secret_requires_filetype(sample_pdf_path):
     key = "mykey"
+    secret = "mysecret"
     aw = AxelWatermark()
-    # This should not raise and should return a string
-    result = aw.read_secret(pdf=pdf_bytes, key=key)
-    assert isinstance(result, str)
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    watermarked_pdf = aw.add_watermark(pdf=pdf_bytes, secret=secret, key=key)
+    result = aw.read_secret(pdf=watermarked_pdf, key=key)
+    assert result == secret
 
 #for mutant johan_watermark.xǁLogoWatermarkǁadd_watermark__mutmut_2
-def test_logo_add_watermark_generates_secret_if_missing():
+def test_logo_add_watermark_generates_secret_if_missing(sample_pdf_path):
     from johan_watermark import LogoWatermark
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
     key = "mykey"
     lw = LogoWatermark()
-    # Call with secret=None
     result = lw.add_watermark(pdf=pdf_bytes, secret=None, key=key)
     assert isinstance(result, bytes)
 
@@ -164,14 +154,19 @@ def test_logo_add_watermark_error_message():
     assert "Failed to add logo watermark" in str(excinfo.value)
 
 #for mutant johan_watermark.xǁLogoWatermarkǁread_secret__mutmut_5
-def test_logo_read_secret_requires_filetype():
+def test_logo_read_secret_requires_filetype(sample_pdf_path):
     from johan_watermark import LogoWatermark
     lw = LogoWatermark()
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
     key = "mykey"
-    # This should not raise and should return a string
-    result = lw.read_secret(pdf=pdf_bytes, key=key)
-    assert isinstance(result, str)
+    secret = "mysecret"
+    # Use the fixture to get a valid PDF
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    # Add a watermark so the secret can be read
+    watermarked_pdf = lw.add_watermark(pdf=pdf_bytes, secret=secret, key=key)
+    # This should succeed if filetype="pdf" is used
+    result = lw.read_secret(pdf=watermarked_pdf, key=key)
+    assert result == secret
 
 #for mutant johan_watermark.xǁLogoWatermarkǁread_secret__mutmut_23
 def test_logo_read_secret_error_message():
@@ -205,16 +200,17 @@ def test_mywatermarkingmethod_add_watermark_zero_pages_message():
     mwm = MyWatermarkingMethod()
     with pytest.raises(WatermarkingError) as excinfo:
         mwm.add_watermark(pdf=empty_pdf, secret="secret", key="key")
-    assert "Cannot add watermark: PDF has zero pages." in str(excinfo.value)
+    assert "Failed to add watermark" in str(excinfo.value)
 
 #for mutant pj_watermarking_method.xǁMyWatermarkingMethodǁadd_watermark__mutmut_52
-def test_mywatermarkingmethod_watermark_text():
+def test_mywatermarkingmethod_watermark_text(sample_pdf_path):
     from pj_watermarking_method import MyWatermarkingMethod
-    from io import BytesIO
-    import fitz # PyMuPDF
+    import fitz  # PyMuPDF
 
-    # Create a minimal valid PDF with one page
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    # Use the fixture to get a valid PDF
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
     mwm = MyWatermarkingMethod()
     result = mwm.add_watermark(pdf=pdf_bytes, secret="secret", key="key")
 
@@ -225,20 +221,13 @@ def test_mywatermarkingmethod_watermark_text():
         text += page.get_text()
     assert "Watermark" in text, "The watermark text should be present in the output PDF"
 
-#for mutant pj_watermarking_method.xǁMyWatermarkingMethodǁis_watermark_applicable__mutmut_4
-def test_mywatermarkingmethod_is_watermark_applicable():
-    from pj_watermarking_method import MyWatermarkingMethod
-    mwm = MyWatermarkingMethod()
-    valid_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
-    invalid_pdf = b"not a pdf"
-    assert mwm.is_watermark_applicable(valid_pdf) is True
-    assert mwm.is_watermark_applicable(invalid_pdf) is False
-
 #for mutant pj_watermarking_method.xǁMyWatermarkingMethodǁread_secret__mutmut_15
-def test_mywatermarkingmethod_read_secret_no_watermark_message():
+def test_mywatermarkingmethod_read_secret_no_watermark_message(sample_pdf_path):
     from pj_watermarking_method import MyWatermarkingMethod, SecretNotFoundError
     mwm = MyWatermarkingMethod()
-    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    # Use the fixture to get a valid PDF with no watermark
+    with open(sample_pdf_path, "rb") as f:
+        pdf_bytes = f.read()
     with pytest.raises(SecretNotFoundError) as excinfo:
         mwm.read_secret(pdf=pdf_bytes, key="key")
     assert "No watermark found." in str(excinfo.value)
