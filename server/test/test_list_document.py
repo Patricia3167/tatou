@@ -17,7 +17,7 @@ def test_list_documents(auth_headers, uploaded_document):
     assert "sha256" in found
     assert "size" in found
 
-    # --- Confidentiality check: another user should NOT see this document's metadata ---
+    # Confidentiality check: another user should not see this document's metadata
     unique = uuid.uuid4().hex[:8]
     other_user = {
         "login": f"otheruser_{unique}",

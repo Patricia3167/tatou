@@ -6,11 +6,10 @@ API_URL = "http://server:5000/api"
 
 @pytest.mark.usefixtures("auth_headers", "watermarked_document")
 def test_read_watermark(auth_headers, watermarked_document):
-    # Use the watermark info from the fixture
     payload = watermarked_document["watermark"]
     doc_id = watermarked_document["id"]
 
-    # 1. Owner retrieves the secret using read-watermark
+    # Owner retrieves the secret using read-watermark
     read_payload = {
         "method": payload["method"],
         "key": payload["key"],
@@ -22,7 +21,7 @@ def test_read_watermark(auth_headers, watermarked_document):
     assert result["secret"] == payload["secret"]
     assert result["method"] == payload["method"]
 
-    # 2. Another user should NOT be able to retrieve the secret
+    #Another user should Nnot be able to retrieve the secret
     other_unique = uuid.uuid4().hex[:8]
     other_user = {
         "login": f"otheruser_{other_unique}",
