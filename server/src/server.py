@@ -35,8 +35,18 @@ from watermarking_method import WatermarkingMethod
 #from watermarking_utils import METHODS, apply_watermark, read_watermark, explore_pdf, is_watermarking_applicable, get_method
 
 def create_app():
+    # --- Login attempt tracking ---
+    failed_login_attempts = {}
+    MAX_FAILED_LOGIN = 3
 
     app = Flask(__name__)
+
+    # --- Security logging setup ---
+    security_log = logging.FileHandler("security.log")
+    security_log.setLevel(logging.WARNING)
+    formatter = logging.Formatter("[%(asctime)s] %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
+    security_log.setFormatter(formatter)
+    app.logger.addHandler(security_log)
 
     # Logging and rate limiter to prevent DDOS. Extremely strict with 30 requests per minute.
 
@@ -180,6 +190,7 @@ def create_app():
                     {"id": uid},
                 ).one()
         except IntegrityError:
+            app.logger.warning(f"[SECURITY] Duplicate account creation attempt: {email} from {request.remote_addr}")
             return jsonify({"error": "email or login already exists"}), 409
         except Exception as e:
             return jsonify({"error": f"database error: {str(e)}"}), 503
@@ -196,6 +207,10 @@ def create_app():
         if not email or not password:
             return jsonify({"error": "email and password are required"}), 400
 
+        # Check for maximum failed login attempts
+        if failed_login_attempts.get(email, 0) >= MAX_FAILED_LOGIN:
+            return jsonify({"error": "maximum failed login attempts reached"}), 429
+
         try:
             with get_engine().connect() as conn:
                 row = conn.execute(
@@ -206,8 +221,14 @@ def create_app():
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
         if not row or not check_password_hash(row.hpassword, password):
+            app.logger.warning(
+                f"[SECURITY] Failed login attempt for email={email} from {request.remote_addr}"
+            )
+            failed_login_attempts[email] = failed_login_attempts.get(email, 0) + 1
             return jsonify({"error": "invalid credentials"}), 401
 
+        # Reset failed attempts after successful login
+        failed_login_attempts[email] = 0
         token = _serializer().dumps({"uid": int(row.id), "login": row.login, "email": row.email})
         return jsonify({"token": token, "token_type": "bearer", "expires_in": app.config["TOKEN_TTL_SECONDS"]}), 200
 
@@ -233,11 +254,13 @@ def create_app():
         fname = secure_filename(file.filename)
         if not fname.lower().endswith(".pdf"):
             app.logger.warning("Extension check failed")
+            app.logger.warning("[SECURITY] Invalid file extension attempt detected")
             return jsonify({"error": "only .pdf files are allowed"}), 400
         # Check MIME type
         mime_type, _ = mimetypes.guess_type(fname)
         if mime_type != "application/pdf":
             app.logger.warning("Content type check failed")
+            app.logger.warning("[SECURITY] Invalid MIME type upload attempt detected")
             return jsonify({"error": "invalid MIME type, that's not a pdf"}), 400
         # Check magic number
         file.seek(0)
@@ -245,6 +268,7 @@ def create_app():
         file.seek(0)
         if header != b"%PDF":
             app.logger.warning("Magic number check failed")
+            app.logger.warning("[SECURITY] Invalid PDF header detected — possible exploit upload")
             return jsonify({"error": "file does not appear to be a valid PDF"}), 400
 
         user_dir = app.config["STORAGE_DIR"] / "files" / g.user["login"]
@@ -431,6 +455,10 @@ def create_app():
 
         # Don’t leak whether a doc exists for another user
         if not row:
+            app.logger.warning(
+                f"[SECURITY] Unauthorized access attempt by user {g.user['id']} "
+                f"to document id={document_id} from {request.remote_addr}"
+            )
             return jsonify({"error": "document not found"}), 404
 
         file_path = Path(row.path)
@@ -559,7 +587,11 @@ def create_app():
             return jsonify({"error": f"database error: {str(e)}"}), 503
 
         if not row:
-            # Don’t reveal others’ docs—just say not found
+            # Possible unauthorized delete attempt (either not found or not owner)
+            app.logger.warning(
+                f"[SECURITY] Unauthorized delete attempt by user {g.user['id']} "
+                f"on document id={doc_id} from {request.remote_addr}"
+            )
             return jsonify({"error": "document not found"}), 404
 
         # Resolve and delete file (best effort)
@@ -795,6 +827,7 @@ def create_app():
             return jsonify({"error": f"plugin path error: {e}"}), 500
 
         if not plugin_path.exists():
+            app.logger.warning(f"[SECURITY] Plugin load attempt for missing file: {filename} by user {g.user['id']}")
             return jsonify({"error": f"plugin file not found: {filename}"}), 404
 
         # Unpickle the object (dill if available; else std pickle)
