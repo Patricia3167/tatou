@@ -1,0 +1,200 @@
+# ------------------------------------------------------------------------
+# Tatou API fuzzing configuration
+# ------------------------------------------------------------------------
+
+fuzzer:
+  tool: "Hypothesis (Python)"
+  version: "6.67.0"
+  description: "Property-based fuzzer using strategies to cover edge cases for implemented endpoints."
+
+target:
+  base_url: "http://server:5000/api"
+  endpoints: 
+    - "/create-user"
+    - "/login"
+    - "/upload-document"
+    - "/list-documents"
+    - "/list-versions"
+    - "/list-all-versions"
+    - "/get_document"
+    - "/get_version"
+    - "/create_watermark"
+    - "/load-plugin"
+    - "/read-watermark"
+    - "/rmap-initiate"
+    - "/rmap-get-link"
+
+auth:
+  headers:
+    Authorization: "Bearer VALID_TEST_TOKEN"
+
+# shared strategies here
+shared_components:
+  text_edge:
+    components:
+      - type: text
+        min_size: 0
+        max_size: 256
+      - type: sampled_from
+        values:
+          - ""
+          - "null"
+          - "undefined"
+          - "NaN"
+          - "' OR 1=1 --"
+          - "%00"
+          - "🔥💥🚀"
+          - "日本語"
+          - "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+  int_edge:
+    components:
+      - type: integer
+      - type: sampled_from
+        values: [-999999999, -1, 0, 1, 999999999]
+
+  bool_edge:
+    type: sampled_from
+    values: [true, false]
+
+  binary_edge:
+    type: binary
+    min_size: 0
+    max_size: 256
+
+  mime_edge:
+    type: sampled_from
+    values: ["application/pdf", "application/zip", "text/plain", "image/png", "application/x-msdownload"]
+
+  header_dict_edge:
+    components:
+      - type: sampled_from
+        values:
+          - {}
+          - {"X-Debug": "true"}
+          - {"X-Fuzz": "abc"}
+          - {"X-Empty": ""}
+          - {"X-Long": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+
+# endpoint-specific strategies here
+strategies:
+  create_user:
+    email: ${shared_components.text_edge}
+    login: ${shared_components.text_edge}
+    password: ${shared_components.text_edge}
+
+  login:
+    email: ${shared_components.text_edge}
+    password: ${shared_components.text_edge}
+
+  upload_document:
+    filename: ${shared_components.text_edge}
+    content: ${shared_components.binary_edge}
+    mime: ${shared_components.mime_edge}
+    form_name: ${shared_components.text_edge}
+    extension: ${shared_components.text_edge}
+    magic_prefix: ${shared_components.text_edge}
+    traversal: ${shared_components.bool_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  list_documents:
+    token_prefix: ${shared_components.text_edge}
+    token_body: ${shared_components.text_edge}
+    use_real: ${shared_components.bool_edge}
+    use_auth: ${shared_components.bool_edge}
+    query_key: ${shared_components.text_edge}
+    doc_id: ${shared_components.int_edge}
+
+  list_versions:
+    use_path: ${shared_components.bool_edge}
+    query_key: ${shared_components.text_edge}
+    doc_id: ${shared_components.int_edge}
+    use_auth: ${shared_components.bool_edge}
+
+  list_all_versions:
+    extra_headers: ${shared_components.header_dict_edge}
+    use_auth: ${shared_components.bool_edge}
+    query_key: ${shared_components.text_edge}
+    doc_id: ${shared_components.int_edge}
+
+  get_document:
+    use_path: ${shared_components.bool_edge}
+    doc_id: ${shared_components.int_edge}
+    query_id: ${shared_components.text_edge}
+    query_key: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  get_version:
+    link: ${shared_components.text_edge}
+    traversal: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  delete_document:
+    use_path: ${shared_components.bool_edge}
+    use_query: ${shared_components.bool_edge}
+    use_body: ${shared_components.bool_edge}
+    doc_id: ${shared_components.int_edge}
+    query_key: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  create_watermark:
+    location:
+      type: sampled_from
+      values: ["path", "query", "body", "none"]
+    doc_id: ${shared_components.int_edge}
+    query_key:
+      type: sampled_from
+      values: ["id", "documentid", "foo", ""]
+    method:
+      type: sampled_from
+      values: ["stamp", "overlay", "axel", "logo-watermark", "my-method-secure"]
+    intended_for: ${shared_components.text_edge}
+    position:
+      type: sampled_from
+      values: ["top-left", "bottom-right", "", "🔥"]
+    secret: ${shared_components.text_edge}
+    key: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  load_plugin:
+    filename: ${shared_components.text_edge}
+    file_bytes: ${shared_components.binary_edge}
+    overwrite: ${shared_components.bool_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+    extension:
+      type: sampled_from
+      values: [".pkl", ".dill", ".bin", ""]
+
+  read_watermark:
+    location:
+      type: sampled_from
+      values: ["path", "query", "body", "none"]
+    doc_id: ${shared_components.int_edge}
+    query_key:
+      type: sampled_from
+      values: ["id", "documentid", "foo", ""]
+    method:
+      type: sampled_from
+      values: ["stamp", "embed", "extract", "default-method"]
+    position:
+      type: sampled_from
+      values: ["top-left", "bottom-right", "", "center"]
+    key: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  rmap_initiate:
+    payload: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
+  rmap_get_link:
+    payload: ${shared_components.text_edge}
+    use_auth: ${shared_components.bool_edge}
+    extra_headers: ${shared_components.header_dict_edge}
+
