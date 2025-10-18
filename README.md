@@ -31,9 +31,6 @@ cp sample.env .env
 
 
 # Database
-MARIADB_ROOT_PASSWORD=Hörby98!
-MARIADB_USER=user
-MARIADB_PASSWORD=Nacka01!
 
 {redacted from readme file. please see report}
 # Container paths
