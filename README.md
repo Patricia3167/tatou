@@ -35,13 +35,7 @@ MARIADB_ROOT_PASSWORD=Hörby98!
 MARIADB_USER=user
 MARIADB_PASSWORD=Nacka01!
 
-
-# Flags / secrets
-FLAG_1=f6b180ae790335e1a78f8040de86be1f270e65ce
-FLAG_2=21f2d86f4e011cf27248b220d4a75975171b024d
-SERVER_KEY_PASSPHRASE=Hörby98@
-
-
+{redacted from readme file. please see report}
 # Container paths
 CLIENT_KEYS_DIR=/app/pki
 SERVER_KEYS_DIR=/home/lab/server_keys
